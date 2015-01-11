@@ -41,13 +41,13 @@ class Secuencia:
 		self.tiempo = tiempo
 		self.compases = compases
 		self.tono = tono
+		self.modo = modo
 
 		self.track = Track()
 		buffBar = Bar(self.tono, meter=(self.tiempo, self.pulso))
 		for _ in range(compases*tiempo):
 			self.track.add_notes(None, pulso)
 
-		self.modo = modo(self.tono.name)
 
 	def obtenerNota(self, compas, tiempo):
 		"""	obtener un arreglo de notas que representan en el mismo orden las notas de las posiciones solicitadas
@@ -60,8 +60,6 @@ class Secuencia:
 		"""
 
 		self.track[compas][tiempo][2] = NoteContainer(nota)
-#		self.track[compas].place_notes_at(nota, tiempo/self.pulso)
-#		raise NameError('NoImplementadoTodavia')
 
 	def agregarTrack(self, track):
 		""" agrega el track dado al de la secuencia 
@@ -85,35 +83,49 @@ class Secuencia:
 		""" invierte la secuencia
 		"""
 
+		nt = Track()
+		for c in range(self.compases-1, -1, -1):
+			for t in range(self.tiempo-1, -1, -1):
+				nt.add_notes(self.obtenerNota(c, t)[2], self.pulso)
+		self.track = nt
+		return self
+
 	def cambiarTono(self, tono):
 		""" cambia la tonal de la secuencia
 		"""
 
-		tonoViejo = self.tono.copy()
+		tonoViejo = Note(self.tono.name, self.tono.octave)
 		self.tono = tono
 
-		if _notes.note_to_int(tonoViejo) > _notes.notes_to_int(tono):
-			tono = int_to_note(12-_notes.note_to_int(tono))
-		intervalo = _notes.notes_to_int(tono) - _notes.notes_to_int(tonoViejo)
+		intervalo = int(tono) - int(tonoViejo)
+		funcion = "augment"
+		if int(tonoViejo) > int(tono):
+			intervalo *= -1
+			funcion = "diminish"
 
 		for compas in self.track[:]:
 			for notas in compas[:]:
-				for nota in notas[:]:
-					for _ in range(intervalo):
-						nota.augment()
+				if notas[2]:
+					for nota in notas[2][:]:
+						for _ in range(intervalo):
+							getattr(nota, funcion)()
+						# TODO hacer que se saquen los accidentes rebundantes
+						getattr(nota, "remove_redundant_accidentals")()
+		return self
 
-	def cabiarModo(self, modo):
+	def cambiarModo(self, modo):
 		""" cambia el modo de la secuencia
 		"""
 
-		modoViejo = self.modo.copy()
+		notas_de_modo = self.modo(self.tono.name)
 		self.modo = modo
 
-		notas_de_modo = modoViejo.ascending()
 		for compas in self.track[:]:
 			for notas in compas[:]:
-				for nota in notas[:]:
-					nota = self.modo.degree(notas_de_modo.index(nota))
+				if notas[2]:
+					for nota in notas[2][:]:
+						nota.name = self.modo(self.tono.name)[notas_de_modo[:].index(nota.name)]
+		return self
 
 	def magiarSecuencia(self, nota, pSubIni, pSubFin, pBajIni, pBajFin, pMod=0, intervalos=[1, 2, 3, 4, 5, 6, 7], octava=4):
 		""" crea una secuencia partiendo de una nota; subiendo, bajando o manteniendo la tonalidad con un cierto porcentaje al inicio y al final cambiando de forma gradual; con cierta probabilidad de modificar la nota por sobreescribirla; para un conjunto de intervalos permitidas
@@ -141,7 +153,7 @@ class Secuencia:
 		cambioBaj = (pBajFin-pBajIni)/(self.compases*self.tiempo)
 
 		grado_actual = nota
-		nota_actual = Note(self.modo[grado_actual-1], octava)
+		nota_actual = Note(self.modo(self.tono.name)[grado_actual-1], octava)
 		for c in range(self.compases):
 			for t in range(self.tiempo):
 				# agregar la primera nota a la secuencia
@@ -157,7 +169,7 @@ class Secuencia:
 					mod = 1
 
 					sig_grado = intervalos[(intervalos.index(grado_actual)+1)%len(intervalos)]
-					nota_actual = Note(self.modo[sig_grado-1], nota_actual.octave)
+					nota_actual = Note(self.modo(self.tono.name)[sig_grado-1], nota_actual.octave)
 					if grado_actual == intervalos[len(intervalos)-1]:
 						nota_actual.octave_up()
 
@@ -166,7 +178,7 @@ class Secuencia:
 					mod = -1
 
 					sig_grado = intervalos[(intervalos.index(grado_actual)-1)%len(intervalos)]
-					nota_actual = Note(self.modo[sig_grado-1], nota_actual.octave)
+					nota_actual = Note(self.modo(self.tono.name)[sig_grado-1], nota_actual.octave)
 					if grado_actual == intervalos[0]:
 						nota_actual.octave_down()
 
@@ -174,7 +186,7 @@ class Secuencia:
 					# se mantiene
 					pass
 
-				grado_actual = self.modo[:].index(nota_actual.name) + 1
+				grado_actual = self.modo(self.tono.name).index(nota_actual.name) + 1
 				pSubIni += cambioSub
 				pBajIni += cambioBaj
 
@@ -183,10 +195,11 @@ class Secuencia:
 				if r < pMod:
 					# se debe modificar
 					if self.obtenerNota(c, t)[2]:
-						grado_temp = self.modo[:].index(self.obtenerNota(c, t).name)
-						self.cambiarNota(c, t, self.modo[(grado_temp+mod)%7])
+						grado_temp = self.modo(self.tono.name).index(self.obtenerNota(c, t).name)
+						self.cambiarNota(c, t, self.modo(self.tono.name)[(grado_temp+mod)%7])
 				else:
 					self.cambiarNota(c, t, copiar.nota(nota_actual))
+		return self
 
 	def mezclar(self, track, pEscrIni, pEscrFin):
 		""" mezclar el track dado con cierto porcentaje de escritura de forma inicial y final cambiando de forma gradual
@@ -201,13 +214,28 @@ class Secuencia:
 		for c in range(self.compases):
 			for t in range(self.tiempo):
 				if self.obtenerNota(c, t)[2]:
-					sys.stdout.write(str(self.obtenerNota(c, t)[2]) + ' ')
+					sys.stdout.write(str(self.obtenerNota(c, t)[2][0]) + ' ')
 				else:
 					sys.stdout.write('x ')
 			sys.stdout.write('| ')
+		sys.stdout.write('\n')
+		return self
 
 	def tocar(self):
 		""" hace sonar la secuencia
 		"""
 
 		fluidsynth.play_Track(self.track)
+		return self
+
+	def copiar(self):
+		""" Entrega una copia del track
+		"""
+
+		rs = Secuencia(self.pulso, self.tiempo, self.compases, self.tono, self.modo)
+		ct = Track()
+		for c in range(self.compases):
+			for t in range(self.tiempo):
+				ct.add_notes(self.obtenerNota(c, t)[2], self.pulso)
+		rs.track = ct
+		return rs
