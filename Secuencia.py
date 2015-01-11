@@ -135,6 +135,7 @@ class Secuencia:
 		pSubFin /= 100.0
 		pBajIni /= 100.0
 		pBajFin /= 100.0
+		pMod /= 100.0
 
 		cambioSub = (pSubFin-pSubIni)/(self.compases*self.tiempo)
 		cambioBaj = (pBajFin-pBajIni)/(self.compases*self.tiempo)
@@ -143,8 +144,10 @@ class Secuencia:
 		nota_actual = Note(self.modo[grado_actual-1], octava)
 		for c in range(self.compases):
 			for t in range(self.tiempo):
-				# agregar nota a la secuencia
-				#self.cambiarNota(c, t, nota_actual.copy())
+				# agregar la primera nota a la secuencia
+				if c == t == 0:
+					self.cambiarNota(c, t, copiar.nota(nota_actual))
+					continue
 				
 				# ver si la tonalidad sube, baja o se mantiene
 				r = random.random()
@@ -154,7 +157,7 @@ class Secuencia:
 					mod = 1
 
 					sig_grado = intervalos[(intervalos.index(grado_actual)+1)%len(intervalos)]
-					nota_actual = Note(self.modo[sig_grado-1])
+					nota_actual = Note(self.modo[sig_grado-1], nota_actual.octave)
 					if grado_actual == intervalos[len(intervalos)-1]:
 						nota_actual.octave_up()
 
@@ -162,8 +165,8 @@ class Secuencia:
 					# baja
 					mod = -1
 
-					sig_grado = intervalos[(intervalos.index(actual.name)-1)%len(intervalos)]
-					nota_actual = Note(self.modo[sig_grado-1])
+					sig_grado = intervalos[(intervalos.index(grado_actual)-1)%len(intervalos)]
+					nota_actual = Note(self.modo[sig_grado-1], nota_actual.octave)
 					if grado_actual == intervalos[0]:
 						nota_actual.octave_down()
 
@@ -171,7 +174,7 @@ class Secuencia:
 					# se mantiene
 					pass
 
-				grado_actual = self.modo[:].index(nota_actual.name)
+				grado_actual = self.modo[:].index(nota_actual.name) + 1
 				pSubIni += cambioSub
 				pBajIni += cambioBaj
 
@@ -179,8 +182,9 @@ class Secuencia:
 				r =random.random()
 				if r < pMod:
 					# se debe modificar
-					grado_temp = self.modo[:].index(self.obtenerNota(c, t).name)
-					self.cambiarNota(c, t, self.modo[(grado_temp+mod)%7])
+					if self.obtenerNota(c, t)[2]:
+						grado_temp = self.modo[:].index(self.obtenerNota(c, t).name)
+						self.cambiarNota(c, t, self.modo[(grado_temp+mod)%7])
 				else:
 					self.cambiarNota(c, t, copiar.nota(nota_actual))
 
@@ -197,7 +201,7 @@ class Secuencia:
 		for c in range(self.compases):
 			for t in range(self.tiempo):
 				if self.obtenerNota(c, t)[2]:
-					sys.stdout.write(str(self.obtenerNota(c, t)[2][0]) + ' ')
+					sys.stdout.write(str(self.obtenerNota(c, t)[2]) + ' ')
 				else:
 					sys.stdout.write('x ')
 			sys.stdout.write('| ')
